@@ -21,6 +21,8 @@ import { createFriendCodeStore } from "./friendcodes/store.js";
 import { createPurchaseCodeStore } from "./store/purchasecodes.js";
 import { createReceiptStore } from "./store/receipts.js";
 import { botsOn, createTournamentStore } from "./tournaments/store.js";
+import { createArenaStore } from "./tournaments/arena.js";
+import { configureArena } from "./tournaments/eventsservice.js";
 import { botModeFor, matchBots } from "./matchmaking/botmodes.js";
 import { configureShowdown, createShowdownRefresh, customShowdownImages } from "./tournaments/showdown.js";
 import { createPayoutSettler } from "./tournaments/payouts.js";
@@ -46,6 +48,7 @@ import { oauthRoutes } from "./services/account/oauth.js";
 import { publicAccountRoutes } from "./services/account/public.js";
 import { portalRoutes } from "./services/portal/routes.js";
 import { contentRoutes } from "./services/content/pages.js";
+import { staticAssetsRoutes } from "./services/content/staticassets.js";
 import { coreIslandRoutes, islandImportPath } from "./services/core/islands.js";
 import { corePresenceRoutes } from "./services/core/presence.js";
 import { coreStatusRoutes } from "./services/core/status.js";
@@ -131,6 +134,9 @@ export function createContext(config) {
   // The admin panel's tournament events (#263), whose dedicated servers and bots (#282) the matchmaking service follows.
   const tournaments = createTournamentStore(config.dataDir);
   configureShowdown(() => tournaments);
+  // Season 8's Arena: each player's Hype and division (Core-Backend #420).
+  const arena = createArenaStore(config.dataDir);
+  configureArena(() => arena);
   const stats = createStatsStore(config.dataDir);
   const reports = createReportStore(config.dataDir);
   const profiles = createProfileStore(config.dataDir, {
@@ -169,6 +175,7 @@ export function createContext(config) {
     islandLinks: createIslandLinkStore(config.dataDir),
     // The admin panel's tournament events and their points (Core-Backend #263).
     tournaments,
+    arena,
     stats,
     profiles,
     mailbox: createMailbox(),
@@ -269,6 +276,7 @@ export function createApp(config, context = createContext(config)) {
   app.use(publicAccountRoutes(context));
   app.use(lightswitchRoutes(context));
   app.use(contentRoutes(context, config));
+  app.use(staticAssetsRoutes(config));
   app.use(versionRoutes(context));
   app.use(calendarRoutes(context));
   app.use(waitingRoomRoutes(context));

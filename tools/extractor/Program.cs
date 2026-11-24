@@ -48,7 +48,7 @@ var game = engine switch
     // and its curve tables are 4.22's (ECurveTableMode: read as 4.21, the Research page's ResearchSystemUpgradesTable and the
     // upgrade level costs, ratings and recycle XP came out empty).
     "4.22" => EGame.GAME_UE4_22,
-    // 8.30 (CL 5793395) is UE 4.23, as FModel reads its paks.
+    // 8.30 (CL 5793395) is UE 4.23, as FModel reads its paks; 8.40 (CL 6005771) too (its exe's FEngineVersion is 4.23.0-6005771).
     "4.23" => EGame.GAME_UE4_23,
     _ => throw new NotSupportedException($"Engine {engine} is not mapped yet")
 };
@@ -71,6 +71,10 @@ if (corePaks.Length > 0)
 }
 else provider.Initialize();
 provider.SubmitKeys([new KeyValuePair<FGuid, FAesKey>(new FGuid(), new FAesKey(aesKey))]);
+// The given key opens the build's main paks (guid zero). When none opens, the key is the wrong one for this build (not Core's
+// pak in the folder: a build's own paks are read the same with it), and the run would stop later at a missing file.
+var mainPaksUnread = provider.UnloadedVfs.Where(vfs => vfs.EncryptionKeyGuid == new FGuid()).Select(vfs => vfs.Name).ToList();
+if (mainPaksUnread.Count > 0) Console.Error.WriteLine($"The given AES key opens none of the build's main paks ({mainPaksUnread.Count} unread): it isn't this build's key.");
 // A pak on a key of its own is read when the backend's own keychain (src/store/keychain.json, "<pak guid>:<base64 key>"
 // entries, what the storefront's keychain route serves) has its key: the client is given that key at login and mounts the
 // pak (6.20's pakchunk1000, Bunnymoon), so its cosmetics are the build's. A pak whose key isn't in it stays unread, as

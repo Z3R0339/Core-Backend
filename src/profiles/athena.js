@@ -9,6 +9,7 @@ import { showtimeFlagsNow } from "../events/festivus.js";
 import { overtimeFlagsNow } from "../events/overtime.js";
 import { highStakes2019FlagsNow } from "../events/highstakes2019.js";
 import { buccaneersBountyFlagsNow } from "../events/buccaneersbounty.js";
+import { airRoyaleFlagsNow } from "../events/airroyale.js";
 import { birthdayChallengeFlagsNow } from "../events/birthday2018.js";
 import { athenaEventQuestsOf } from "../events/fiftyfifty.js";
 import { eventTagOfPlaylist } from "../events/ltms.js";
@@ -179,16 +180,30 @@ const migrated = (profile, name) => (profile.coreMigrations ?? []).includes(name
 // time the account's athena profile loads. 1.8 has no winners question (none of 1.7.2's battleroyale/winners or recordwin
 // strings are left): its umbrella is a glider item the locker equips. An umbrella already in a locker stays.
 const victoryUmbrella = "AthenaGlider:solo_umbrella";
-// Season 3's is the Paper Parasol (Umbrella_PaperParasol), 3.0's AthenaSeason3 SeasonFirstWinRewards, and Season 4's
-// 4.0's AthenaSeason4 SeasonFirstWinRewards, Umbrella_Season_04 ("Wet Paint"), and Season 5's 5.0's AthenaSeason5
-// SeasonFirstWinRewards, Umbrella_Season_05, and Season 6's 6.00's AthenaSeason6 SeasonFirstWinRewards, Umbrella_Season_06
-// ("Webrella"), and Season 7's 7.00's AthenaSeason7
-// SeasonFirstWinRewards, Umbrella_Season_07 ("Snowfall").
-const seasonVictoryUmbrellas = { 2: "AthenaGlider:umbrella_snowflake", 3: "AthenaGlider:umbrella_paperparasol", 4: "AthenaGlider:umbrella_season_04",
-  5: "AthenaGlider:umbrella_season_05", 6: "AthenaGlider:umbrella_season_06", 7: "AthenaGlider:umbrella_season_07" };
+// From Season 3 a season's own is its AthenaSeason<n> SeasonFirstWinRewards (gamedata season.firstWinRewards), from
+// every build's data: Season 3's Paper Parasol (Umbrella_PaperParasol), Season 4's Umbrella_Season_04 ("Wet Paint"),
+// Season 5's Umbrella_Season_05, Season 6's Umbrella_Season_06 ("Webrella"), Season 7's Umbrella_Season_07
+// ("Snowfall"), Season 8's Umbrella_Season_08 (8.00's to 8.30's AthenaSeason8), and so on for every season Core has a
+// build of. Season 2's AthenaSeason2 has no SeasonFirstWinRewards; its Snowflake was given by name.
+const season2VictoryUmbrella = "AthenaGlider:umbrella_snowflake";
+let firstWinRewardsBySeason;
+const seasonVictoryUmbrellas = () => {
+  if (!firstWinRewardsBySeason) {
+    firstWinRewardsBySeason = new Map([[2, [season2VictoryUmbrella]]]);
+    for (const build of dataBuilds) inBuild(build, () => {
+      const season = athenaSeason();
+      const rewards = (season?.firstWinRewards ?? []).map((reward) => reward?.templateId)
+        .filter((templateId) => typeof templateId === "string" && templateId.toLowerCase().startsWith("athena"));
+      if (!season?.seasonNumber || !rewards.length) return;
+      const known = firstWinRewardsBySeason.get(season.seasonNumber) ?? [];
+      firstWinRewardsBySeason.set(season.seasonNumber, [...known, ...rewards.filter((id) => !known.some((other) => sameId(other, id)))]);
+    });
+  }
+  return firstWinRewardsBySeason;
+};
 const founderVictoryUmbrella = "AthenaGlider:founderumbrella";
-const victoryUmbrellas = [victoryUmbrella, ...Object.values(seasonVictoryUmbrellas), founderVictoryUmbrella];
-const victoryUmbrellasOf = (accountId, settings, season) => [victoryUmbrella, seasonVictoryUmbrellas[season],
+const victoryUmbrellas = () => [victoryUmbrella, ...[...seasonVictoryUmbrellas().values()].flat(), founderVictoryUmbrella];
+const victoryUmbrellasOf = (accountId, settings, season) => [victoryUmbrella, ...(seasonVictoryUmbrellas().get(Number(season)) ?? []),
   ownsSaveTheWorld(accountId, settings) ? founderVictoryUmbrella : undefined].filter(Boolean);
 
 // Non-shop items: cosmetics that are given at start, earned in-game (season chase rewards, victory umbrellas),
@@ -220,7 +235,7 @@ export const nonShopCosmeticIds = () => [
   ...battlePassCosmeticIds(),
   "AthenaGlider:founderglider", ...founderStarters510,
   ...chaseRewardIds(),
-  ...victoryUmbrellas,
+  ...victoryUmbrellas(),
   ...unusedUmbrellas,
   ...notShopGliders,
   ...randomCharacters
@@ -1460,12 +1475,13 @@ function settleSeasonGrants(session) {
 // 7.30's Schedule_Festivus (EventFlag.LTE_Festivus, the Showtime Challenges) while its dates do (events/festivus.js), and
 // 7.40's Season7_OT_Schedule (EventFlag.LTE_S7_OverTime, the Overtime Challenges) while its dates do (events/overtime.js),
 // 8.20's Schedule_LTM_Heist_V2 (EventFlag.LTM_HighStakes) while its dates do (events/highstakes2019.js), and 8.30's
-// Schedule_PirateParty (EventFlag.LTE_BootyBay) while its dates do (events/buccaneersbounty.js).
+// Schedule_PirateParty (EventFlag.LTE_BootyBay) while its dates do (events/buccaneersbounty.js), and 8.40's
+// Schedule_LTM_Goose (EventFlag.LTM_Goose, the Air Royale Challenges) while its dates do (events/airroyale.js).
 function settleEventSchedules(session) {
   const schedules = athenaChallengeSchedules() ?? {};
   const event = Object.keys(schedules).filter((id) => schedules[id].eventName);
   if (!event.length) return;
-  const flags = [...activeEventFlags(), ...highStakesFlagsNow(), ...birthdayChallengeFlagsNow(), ...fourteenDaysFlagsNow(), ...iceStormFlagsNow(), ...showtimeFlagsNow(), ...overtimeFlagsNow(), ...highStakes2019FlagsNow(), ...buccaneersBountyFlagsNow()].map((flag) => flag.toLowerCase());
+  const flags = [...activeEventFlags(), ...highStakesFlagsNow(), ...birthdayChallengeFlagsNow(), ...fourteenDaysFlagsNow(), ...iceStormFlagsNow(), ...showtimeFlagsNow(), ...overtimeFlagsNow(), ...highStakes2019FlagsNow(), ...buccaneersBountyFlagsNow(), ...airRoyaleFlagsNow()].map((flag) => flag.toLowerCase());
   const { profile } = session.profile("athena");
   for (const id of event) {
     // One completed and cleaned up (profiles/challenges.js settleCompletedSchedules) doesn't start over while its event runs.
